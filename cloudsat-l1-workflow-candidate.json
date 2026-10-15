@@ -1,0 +1,82 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "CloudSat L1 整体程序流程（伪代码式）",
+    "subtitle": "ReadCloudSatParallel_New.m：按时间片循环读取、处理、匹配并保存数据",
+    "locale": "zh-CN",
+    "visual_preset": "signal-flow",
+    "quality_profile": "standard",
+    "viewBox": [1369, 1845],
+    "output": "cloudsat-l1-workflow.html",
+    "repository": {
+      "url": "https://example.com/CloudSat_L1_First.zip",
+      "link_mode": "local-only",
+      "revision": "c316b7e0ccb88a2e09061b2dbc636dd906128cfa"
+    }
+  },
+  "lanes": [
+    {"id":"main","label":"主脚本：控制与循环"},
+    {"id":"cloudsat","label":"CloudSat：文件读取与产品处理"},
+    {"id":"products","label":"产品分支：质量控制与派生计算"},
+    {"id":"match-save","label":"MERRA2 匹配与结果保存"}
+  ],
+  "phases": [
+    {"id":"setup","label":"初始化配置","fromCol":0,"toCol":0},
+    {"id":"read","label":"读取与筛选","fromCol":1,"toCol":1,"variant":"emphasis"},
+    {"id":"process","label":"分支处理","fromCol":2,"toCol":3},
+    {"id":"output","label":"匹配与输出","fromCol":4,"toCol":5,"variant":"dashed"}
+  ],
+  "groups": [
+    {"id":"time-loop","label":"for itime = 1 : Len_Range","lane":"main","fromCol":1,"toCol":5,"variant":"emphasis"},
+    {"id":"product-if","label":"按 partNameSnd / VarName_temp 分支","lane":"products","fromCol":2,"toCol":4,"variant":"default"},
+    {"id":"skip-path","label":"不满足条件：跳过当前文件或变量","lane":"products","fromCol":1,"toCol":3,"variant":"security"}
+  ],
+  "mainPath": ["start","configure","time-init","read-cloudsat","match-merra","save-mat","next-time","finish"],
+  "semanticChecks": {
+    "allowedRoots": ["start"],
+    "allowedTerminals": ["finish","cldclass","qc","ecmwf"],
+    "requiredPaths": [
+      {"from":"start","to":"finish"},
+      {"from":"read-cloudsat","to":"match-merra"},
+      {"from":"match-merra","to":"save-mat"}
+    ]
+  },
+  "nodes": [
+    {"id":"start","lane":"main","col":0,"type":"external","label":"开始","sublabel":"MATLAB entry","width":145,"sources":[{"path":"ReadCloudSatParallel_New.m","line":1,"end_line":13}]},
+    {"id":"configure","lane":"main","col":1,"type":"backend","label":"配置输入与参数","sublabel":"路径 + 区域 + 产品 + 变量","tag":"初始化","width":160,"sources":[{"path":"ReadCloudSatParallel_New.m","line":15,"end_line":230}]},
+    {"id":"time-init","lane":"main","col":2,"type":"backend","label":"构造时间片","sublabel":"setTime / Len_Range","tag":"for itime","width":155,"sources":[{"path":"ReadCloudSatParallel_New.m","line":50,"end_line":85}]},
+    {"id":"read-cloudsat","lane":"cloudsat","col":3,"type":"backend","label":"读取 CloudSat 时间片","sublabel":"Fun_readCloudsat_Combined","tag":"主数据入口","width":160,"sources":[{"path":"ReadCloudSatParallel_New.m","line":230,"end_line":236}]},
+    {"id":"init-range","lane":"cloudsat","col":2,"type":"backend","label":"初始化时间与文件列表","sublabel":"time + file list","width":160,"sources":[{"path":"Fun_readCloudsat_Combined.m","line":23,"end_line":110}]},
+    {"id":"filter-track","lane":"cloudsat","col":3,"yOffset":78,"type":"backend","label":"逐轨道筛选与匹配","sublabel":"time / product / geo checks","width":160,"sources":[{"path":"Fun_readCloudsat_Combined.m","line":110,"end_line":151}]},
+    {"id":"dispatch","lane":"products","col":4,"type":"backend","label":"按产品与变量分支","sublabel":"if product / variable","tag":"逐变量处理","width":160,"sources":[{"path":"Fun_readCloudsat_Combined.m","line":193,"end_line":550}]},
+    {"id":"cldclass","lane":"products","col":3,"type":"backend","label":"CLDCLASS：识别云结构","sublabel":"Core / DCC / Anvil","width":160,"sources":[{"path":"Fun_readCloudsat_Combined.m","line":204,"end_line":289},{"path":"Fun_CloudSat_Cloud_to_Core.m","line":1,"end_line":80}]},
+    {"id":"qc","lane":"products","col":4,"yOffset":78,"type":"backend","label":"CWC / FLXHR / TAU 质控","sublabel":"missing + scale + range","width":165,"sources":[{"path":"Fun_readCloudsat_Combined.m","line":387,"end_line":550},{"path":"Fun_CWC_Data_Quality_Control.m","line":1,"end_line":70}]},
+    {"id":"ecmwf","lane":"products","col":4,"yOffset":156,"type":"backend","label":"ECMWF：基础或派生量","sublabel":"PW / LTS / CAPE-CIN / RH","width":160,"sources":[{"path":"Fun_readCloudsat_Combined.m","line":475,"end_line":490},{"path":"Fun_ECMWFAux_Derived.m","line":1,"end_line":61}]},
+    {"id":"match-merra","lane":"match-save","col":4,"type":"backend","label":"匹配 MERRA2","sublabel":"read + crop + interpolate","tag":"Fun_MERRA2_Read_and_Match","width":165,"sources":[{"path":"ReadCloudSatParallel_New.m","line":240,"end_line":244},{"path":"Fun_MERRA2_Read_and_Match.m","line":1,"end_line":318}]},
+    {"id":"save-mat","lane":"match-save","col":5,"type":"backend","label":"保存当前时间片","sublabel":"write .mat","width":160,"sources":[{"path":"ReadCloudSatParallel_New.m","line":246,"end_line":250},{"path":"Fun_CloudSat_Save.m","line":1,"end_line":30}]},
+    {"id":"next-time","lane":"main","col":5,"type":"messagebus","label":"还有下一个时间片？","sublabel":"itime++","tag":"循环判断","width":155,"sources":[{"path":"ReadCloudSatParallel_New.m","line":230,"end_line":250}]},
+    {"id":"finish","lane":"main","col":5,"yOffset":78,"type":"external","label":"结束","sublabel":"done","width":145,"sources":[{"path":"ReadCloudSatParallel_New.m","line":230,"end_line":263}]}
+  ],
+  "edges": [
+    {"id":"start-config","from":"start","to":"configure","role":"main","variant":"emphasis"},
+    {"id":"config-time","from":"configure","to":"time-init","role":"main","label":"建立时间范围"},
+    {"id":"time-read","from":"time-init","to":"read-cloudsat","role":"main","label":"每个 itime"},
+    {"id":"read-init","from":"read-cloudsat","to":"init-range","label":"进入函数"},
+    {"id":"init-filter","from":"init-range","to":"filter-track","role":"main"},
+    {"id":"filter-dispatch","from":"filter-track","to":"dispatch","label":"是：有效轨道点","role":"main","variant":"emphasis"},
+    {"id":"dispatch-cld","from":"dispatch","to":"cldclass","label":"CLDCLASS","role":"branch"},
+    {"id":"dispatch-qc","from":"dispatch","to":"qc","label":"CWC / FLXHR / TAU","role":"branch"},
+    {"id":"dispatch-ecmwf","from":"dispatch","to":"ecmwf","label":"ECMWF","role":"branch"},
+    {"id":"read-match","from":"read-cloudsat","to":"match-merra","label":"CloudSat L1 结果","role":"main","variant":"emphasis"},
+    {"id":"match-save","from":"match-merra","to":"save-mat","role":"main","label":"追加 MERRA2 后保存"},
+    {"id":"save-next","from":"save-mat","to":"next-time","role":"main"},
+    {"id":"next-loop","from":"next-time","to":"read-cloudsat","label":"是：继续下一个 itime","role":"branch","route":"up-channel"},
+    {"id":"next-finish","from":"next-time","to":"finish","label":"否：完成","role":"main","variant":"emphasis"}
+  ],
+  "cards": [
+    {"dot":"cyan","title":"伪代码主线","items":["配置参数；for each time slice：读取 CloudSat → 处理产品 → 匹配 MERRA2 → 保存 .mat","当前时间片完成后回到循环判断，直到 Len_Range 结束"]},
+    {"dot":"violet","title":"核心分支","items":["文件不在时间窗、产品缺失或无有效轨道点时跳过","产品分支按 CLDCLASS、CWC/FLXHR/TAU、ECMWF 分别处理"]},
+    {"dot":"amber","title":"图的阅读方式","items":["这是整体执行流程，不展开每个数学 helper 的内部公式","箭头表示源码中的调用/返回及循环关系；PDF 说明用于解释节点职责"]}
+  ]
+}
