@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "CloudSat L1 MATLAB 脚本逻辑调用关系",
+    "subtitle": "主流程：CloudSat 多产品读取 → 质量控制与派生 → MERRA2 匹配 → MAT 保存",
+    "locale": "zh-CN",
+    "output": "cloudsat-l1-call-graph.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://example.com/CloudSat_L1_First.zip",
+      "link_mode": "local-only",
+      "revision": "c316b7e0ccb88a2e09061b2dbc636dd906128cfa"
+    }
+  },
+  "components": [
+    {"id":"runner","type":"external","label":"MATLAB 运行入口","sublabel":"ReadCloudSatParallel_New.m","pos":[40,270],"size":[180,74],"sources":[{"path":"ReadCloudSatParallel_New.m","line":1,"end_line":13}]},
+    {"id":"orchestrator","type":"backend","label":"主控脚本","sublabel":"参数、时间窗、产品清单","pos":[280,270],"size":[190,74],"sources":[{"path":"ReadCloudSatParallel_New.m","line":15,"end_line":230}]},
+    {"id":"cloudsat-files","type":"database","label":"CloudSat 产品文件","sublabel":"FLXHR / CLDCLASS / CWC / ECMWF / TAU","pos":[300,80],"size":[220,74],"sources":[{"path":"Fun_readCloudsat_Combined.m","line":27,"end_line":39}]},
+    {"id":"prepare","type":"backend","label":"轨道与产品准备","sublabel":"时间、文件、坐标、共轨点","pos":[550,90],"size":[210,78],"sources":[{"path":"Fun_readCloudsat_Combined.m","line":23,"end_line":151}]},
+    {"id":"product-dispatch","type":"backend","label":"逐产品读取分发","sublabel":"CLDCLASS / CWC / FLXHR / ECMWF / TAU","pos":[550,270],"size":[210,82],"sources":[{"path":"Fun_readCloudsat_Combined.m","line":193,"end_line":550}]},
+    {"id":"cloud-physics","type":"backend","label":"云结构识别","sublabel":"云层投影 → Core / DCC / Anvil","pos":[820,80],"size":[205,78],"sources":[{"path":"Fun_CloudSat_Cloud_to_Core.m","line":1,"end_line":80}]},
+    {"id":"quality-control","type":"backend","label":"产品质量控制","sublabel":"缺测、比例因子、有效范围","pos":[820,270],"size":[205,78],"sources":[{"path":"Fun_CWC_Data_Quality_Control.m","line":1,"end_line":70},{"path":"Fun_FLXHR_Data_Quality_Control.m","line":1,"end_line":70}]},
+    {"id":"met-derived","type":"backend","label":"ECMWF 派生计算","sublabel":"PW / LTS / CAPE-CIN / RH","pos":[820,450],"size":[205,78],"sources":[{"path":"Fun_ECMWFAux_Derived.m","line":1,"end_line":61}]},
+    {"id":"merra-match","type":"backend","label":"MERRA2 轨道匹配","sublabel":"读取、裁剪、插值、写回 varValue","pos":[1090,270],"size":[210,82],"sources":[{"path":"Fun_MERRA2_Read_and_Match.m","line":1,"end_line":318}]},
+    {"id":"merra-files","type":"database","label":"MERRA2 NetCDF 文件","sublabel":"按 CloudSat 时间与区域取数","pos":[1090,80],"size":[210,74],"sources":[{"path":"Fun_MERRA2_Time_to_FilesInfo.m","line":1,"end_line":35}]},
+    {"id":"save","type":"backend","label":"结果汇总与保存","sublabel":"varValue → 分解字段 → .mat","pos":[1360,270],"size":[200,82],"sources":[{"path":"Fun_CloudSat_Save.m","line":1,"end_line":32},{"path":"Fun_Struct_Decomposed_for_Save.m","line":1,"end_line":25}]},
+    {"id":"mat-output","type":"database","label":"L1 MAT 结果","sublabel":"按时间、区域、昼夜信息命名","pos":[1360,450],"size":[200,74],"sources":[{"path":"Fun_CloudSat_Save.m","line":5,"end_line":30}]}
+  ],
+  "boundaries": [
+    {"kind":"region","label":"CloudSat 多产品读取与处理","wraps":["prepare","product-dispatch","cloud-physics","quality-control","met-derived"]},
+    {"kind":"region","label":"MERRA2 外部场匹配","wraps":["merra-match"]}
+  ],
+  "connections": [
+    {"id":"runner-orchestrator","from":"runner","to":"orchestrator","label":"启动并传入配置","variant":"emphasis"},
+    {"id":"orchestrator-prepare","from":"orchestrator","to":"prepare","label":"调用 Fun_readCloudsat_Combined","variant":"emphasis"},
+    {"id":"files-prepare","from":"cloudsat-files","to":"prepare","label":"扫描 HDF 产品文件","fromSide":"bottom","toSide":"top"},
+    {"id":"prepare-dispatch","from":"prepare","to":"product-dispatch","label":"文件路径 + Geo_Product_Index","variant":"emphasis"},
+    {"id":"dispatch-cloud","from":"product-dispatch","to":"cloud-physics","label":"CLDCLASS 云层信息","fromSide":"top","toSide":"bottom"},
+    {"id":"dispatch-qc","from":"product-dispatch","to":"quality-control","label":"CWC / FLXHR 原始变量","variant":"emphasis"},
+    {"id":"dispatch-met","from":"product-dispatch","to":"met-derived","label":"ECMWF 基础廓线","fromSide":"bottom","toSide":"top"},
+    {"id":"orchestrator-merra","from":"orchestrator","to":"merra-match","label":"Fun_MERRA2_Read_and_Match(varValue_L1)","variant":"emphasis"},
+    {"id":"merra-files-match","from":"merra-files","to":"merra-match","label":"时间定位与 NetCDF 读取","fromSide":"bottom","toSide":"top"},
+    {"id":"match-save","from":"merra-match","to":"save","label":"追加 MERRA2 匹配结果","variant":"emphasis"},
+    {"id":"save-output","from":"save","to":"mat-output","label":"写入 .mat","fromSide":"bottom","toSide":"top","variant":"dashed"}
+  ],
+  "cards": [
+    {"dot":"cyan","title":"主路径","items":["ReadCloudSatParallel_New.m 按时间窗循环处理","每个时间片先形成 CloudSat L1，再叠加 MERRA2，最后保存"]},
+    {"dot":"violet","title":"产品分支","items":["CLDCLASS 负责云结构与 DCC/Anvil/Core 识别","CWC、FLXHR、ECMWF、TAU 在分发节点按产品规则处理"]},
+    {"dot":"amber","title":"阅读边界","items":["图中展示高层调用关系；通用读数与小型数学 helper 已折叠","PDF 是职责说明，箭头方向以 MATLAB 源码实际调用为准"]}
+  ]
+}
